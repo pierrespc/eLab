@@ -1,0 +1,6 @@
+WholeDataSet.tsv
+.DS_Store
+credentials
+DDBB_extracts.csv
+UploadData/extract/RawTables/
+ConfigDiscussion/
