@@ -204,7 +204,8 @@ registered = {}
 for name in ["Skeleton Element","Extract"]:
     print(name)
     r = requests.get(url + "samples" , headers = headers2, params = {'sampleTypeID': types[name]})
-    BadRequest(r,200)
+    if BadRequest(r,200):
+        r.raise_for_status()
     data = r.json()
     myList = {}
     for sam in data.get("data"):
@@ -228,7 +229,8 @@ for index,name in extractTable[ExeDict['Name']].items():
         patch=True
         id=registered['Extract'][name]
         r=requests.get(url + "samples/"+id, headers = headers2)
-        BadRequest(r,200)
+        if BadRequest(r,200):
+            r.raise_for_status()
         r=r.json()
         
         ###change to lower case all the keys because API sometimes use upper, lower for different request (A MESS!)
@@ -299,7 +301,8 @@ for index,name in extractTable[ExeDict['Name']].items():
     if patch:
         #print("patching meta so need to heck if differences for "+name)
         MDR=requests.get(url + "samples/"+id+"/meta", headers = headers2)
-        BadRequest(MDR,200)
+        if BadRequest(MDR,200):
+            MDR.raise_for_status()
         data=MDR.json().get("data")
         metaLoaded={}
         for i in data:
@@ -308,7 +311,8 @@ for index,name in extractTable[ExeDict['Name']].items():
     for fea in FeateLabExe.keys():
         needToPatch=False
         MDR=requests.get(url + "samples/"+id+"/meta", headers = headers2)
-        BadRequest(MDR,200)
+        if BadRequest(MDR,200):
+            MDR.raise_for_status()
         ###get new element to be loaded
         if FeateLabExe[fea]['ID'] != "notMeta" and FeateLabExe[fea]['TYPE'] != "FILE":
             ###fixed value (from dico)
@@ -386,7 +390,8 @@ for index,name in extractTable[ExeDict['Name']].items():
                 #print(MetaData)      
                 MDR=requests.put(url + "samples/"+id+"/meta", headers = headers2,data = MetaData)
                 ####check the MetaData loading was correct
-                BadRequest(MDR,204)
+                if BadRequest(MDR,204):
+                    MDR.raise_for_status()
     #print("metadata OK for "+ name + " (" + id + ")")
     ###patch the quantity
     Quant={}
@@ -407,17 +412,301 @@ for index,name in extractTable[ExeDict['Name']].items():
     Quant["displayUnit"]=Quant["Unit"].capitalize()
     Quant["fullAmount"]=Quant["Amount"]
     QR=requests.put(url + "samples/" + id + "/quantity", headers = headers2, data = Quant)
-    BadRequest(QR,204)
+    if BadRequest(QR,204):
+        QR.raise_for_status()
 
     ###put actual weight in note when there is a "<"
     if Note is not None:
             r=requests.get(url + "samples/"+id, headers = headers2)
-            BadRequest(r,200)
+            if BadRequest(r,200):
+                r.raise_for_status()
             Data=r.json()
             Data["note"]=Data["note"]+" / "+ Note
             r=requests.patch(url + "samples/"+id, headers = headers2,data = Data)
-            BadRequest(r,204)
-print("finished") 
+            if BadRequest(r,204):
+                r.raise_for_status()
+
+
+print("Extract assignation to experiments")
+print("First retrieve the eLab ID needed to access the sampleIN and sampleOUT sections.")
+
+r = requests.get(url + "experiments", headers = headers2,params = params)
+data = r.json()
+experiments = {}
+for exp in data.get("data"):
+    experiments[format(exp.get("name"))] = format(exp.get("experimentID"))
+
+
+
+for expe in list(experiments.keys()):
+    #print(expe)
+    idExpe=experiments[expe]
+    r=requests.get("https://elab-dev.pasteur.fr/api/v1/experiments/"+idExpe+"/sections",headers=headers1)
+    if r.status_code != 200:
+        print(r.status_code)
+        print(r.raise_for_status())
+    if r.json().get("recordCount") == 0:
+        print("no record")
+        continue
+    SampleIN={}
+    SampleOUT={}
+    for data in r.json().get("data"):
+        if data["sectionType"] == "SAMPLESIN":
+            SampleIN[data["sectionHeader"]]=data["expJournalID"]
+        elif data["sectionType"] == "SAMPLESOUT":
+            SampleOUT[data["sectionHeader"]]=data["expJournalID"]
+    experiments[expe]={"ID":idExpe,
+                      "sampleIN":SampleIN,
+                      "sampleOUT":SampleOUT}
+#print(experiments)
+
+
+print("Assign to Drilling /LAB/ Laboratory Protocols,")
+print("Where /LAB/ is the Lab appearing in DrillingProtocole colum")
+print("pulverized pieces (sampleOUT) and  the skeleton elements they derive from (sampleIN)")
+###We start retrieving all field IDs required for that
+#the sampleIN and sampleOUT id for the experiment
+CorresExtract={"petrous":"Pulverized petrous bone",
+                  "dental calculus":"Scratched Dental Calculus",
+                  "pulp":"Pulverized Pulp",
+                  "root":"Pulverized Root",
+                   "root apex":"Pulverized Root Apex",
+                  "long bone":"Pulverized long bone",
+                    "other":"Pulverized other bone",
+              }
+CorresSkel={"Dental Calculus":"Tooth processed",
+            "Petrous":"Petrous bone processed",
+            "Tooth":"Tooth processed",
+            "Other Bone":"Long bone processed "}
+
+listOUT={}
+listIN={}
+for lab in ["Guraeib","Del Papa","Schroeder","Rascovan","Rascovan 2.0"]:
+    listOUT[lab]={}
+    listIN[lab]={}
+    for exType in CorresExtract:
+        listOUT[lab][CorresExtract[exType]]=[]
+
+    for skelType in CorresSkel:
+        listIN[lab][CorresSkel[skelType]]=[]
+
+
+for index, extract in extractTable["ExtractID"].items():
+    if format(extract)=="nan":
+        continue
+    protocole=extractTable["DrillingProtocole"][index]
+    if protocole is None:
+        continue
+    idOUT=registered["Extract"][extract]
+    MER=requests.get(url+"/samples/"+idOUT+"/meta",headers=headers1)
+    if BadRequest(MER,200):
+        MER.raise_for_status()
+    #get Extract Type and check it is found
+    exType=None
+    for meta in MER.json().get("data"):
+        if meta["key"]=="Extract Type":
+            exType=meta["value"]
+            break
+    if exType is None:
+        print("Extract Type not found")
+        break
+    ###prepare sampleIN for that extract
+    #get parentSampleID (the skeleton element)
+    ER=requests.get(url+"/samples/"+idOUT,headers=headers1)
+    if BadRequest(ER,200):
+        ER.raise_for_status()
+    idIN=format(ER.json()["parentSampleID"])
+
+    #get meta
+    SMR=requests.get(url+"/samples/"+idIN+"/meta",headers=headers1)
+    if BadRequest(SMR,200):
+        SMR.raise_for_status()
+
+    ##get skeleton element type and check it is found
+    archoID=None
+    skelType=None
+    expediente=None
+    for meta in SMR.json().get("data"):
+        if meta["key"]=="Bone type":
+            skelType=meta["value"]
+    if skelType is None:
+        print("Skeleton Ele Type not found")
+        print(SMR.json().get("data"))
+        break
+
+    listOUT[protocole][CorresExtract[exType]].append(idOUT)
+    listIN[protocole][CorresSkel[skelType]].append(idIN)
+    
+#print(listIN)
+#print(listOUT)
+    
+
+###upload sample IN
+for lab in ["Guraeib","Del Papa","Schroeder","Rascovan","Rascovan 2.0"]:
+    for type in listIN[lab].keys():
+        data=listIN[lab][type]
+        if len(data)==0:
+            continue
+            #print("sample IN : nothing to upload upload for "+type+" to "+lab)
+
+        idIN=format(experiments["Drilling. "+lab+" Laboratory Protocols"]["sampleIN"][type])
+        print("sample IN : upload for "+type+" to "+lab)
+        data=format(data)
+        r=requests.put(url+"/experiments/sections/"+idIN+"/samples",headers=headers1,data = data)
+        if BadRequest(r,204):
+            r.raise_for_status()
+
+###upload sample OUT
+for lab in ["Guraeib","Del Papa","Schroeder","Rascovan","Rascovan 2.0"]:
+    for type in listOUT[lab].keys():
+        data=listOUT[lab][type]
+        if len(data)==0:
+            #print("sample OUT : nothing to upload upload for "+type+" to "+lab)
+            continue        
+        idOUT=format(experiments["Drilling. "+lab+" Laboratory Protocols"]["sampleOUT"][type])
+        print("sample OUT : upload for "+type+" to "+lab)
+        data=format(data)
+        r=requests.put(url+"/experiments/sections/"+idOUT+"/samples",headers=headers1,data = data)
+        if BadRequest(r,204):
+            r.raise_for_status()
+
+print("Assign to Extraction /LAB/ Laboratory Protocols,")
+print("Where /LAB/ is the Lab appearing in ExtractionProtocole colum")
+print("Now we add in as sampleIN and sampleOUT the pulverized bone")
+
+listIN={}
+for lab in ["Schroeder","Rascovan","Rascovan 2.0"]:
+    listIN[lab]=[]
+
+for index, extract in extractTable["ExtractID"].items():
+    if format(extract) == "nan":
+        continue
+    protocole=extractTable["ExtractionProtocole"][index]
+    if format(protocole) == "nan":
+        continue
+    idIN=registered["Extract"][extract]
+    listIN[protocole].append(idIN)
+print(listIN)
+for lab in ["Schroeder","Rascovan","Rascovan 2.0"]:
+    data=format(listIN[lab])
+    if format(data)=="[]":
+        print("sample OUT : nothing to upload for extraction to "+lab)
+    else:
+        print(data)
+        ###assign to sampleIN
+        idExp={"c":str(value) for key, value in experiments["Extraction. "+lab+" Lab Protocols"]["sampleIN"].items()}["c"]
+        r=requests.put(url+"/experiments/sections/"+idExp+"/samples",headers=headers1,data = data)
+        if BadRequest(r,204):
+            r.raise_for_status()
+        ###assign to sampleOUT
+            idExp={"c":str(value) for key, value in experiments["Extraction. "+lab+" Lab Protocols"]["sampleOUT"].items()}["c"]
+        r=requests.put(url+"/experiments/sections/"+idExp+"/samples",headers=headers1,data = data)
+        if BadRequest(r,204):
+            r.raise_for_status()
+
+
+
+print("Extract assignation to Storage")
+print("first organize the storage IDs (a bit messy but eLab treats all storage levels similarly for sample assignation")
+storageByID={}
+r=requests.get(url+"/storageLayers",headers=headers1)
+if BadRequest(r,200):
+    r.raise_for_status()
+    
+stoData=r.json().get("data")
+for sto in stoData:
+    
+    storageByID[sto["storageLayerID"]]={"name":sto["name"],"parentID":sto["parentStorageLayerID"]}
+
+def getParentSto(ID,stoDict):
+    if stoDict[ID]["parentID"]==0:
+        return(stoDict[ID]["name"])
+    else:
+        return(getParentSto(stoDict[ID]["parentID"],stoDict)+", "+stoDict[ID]["name"])
+    
+storage={}
+storageRev={}
+for stoID in storageByID.keys():
+    name=getParentSto(stoID,storageByID)
+    storage[name]=stoID
+    storageRev[stoID]=name
+
+print("Now assign extracts to that storage, accordingly to the storageLayerID column.")
+
+
+for index,name in extractTable[ExeDict['Name']].items():
+    if format(name)=="nan":
+        continue
+    idEx=registered["Extract"][name]    
+    freezer=extractTable["Freezer"][index]
+    if format(freezer) in ["To be spotted","nan"] :
+        freezer="Unknown"
+    freezer=freezer.replace("Mariano Del Papa calculus to extract","Mariano Del Papa calculus extraction")
+    freezer=freezer.replace("A1+A2","A1 + A2")
+    freezer=freezer.replace("B1+B2","B1 + B2")
+    freezer=freezer.replace("sub-bag B1+B2 ","")
+    freezer=freezer.replace("sub-bag B1 + B2 ","")
+    freezer=freezer.replace("sub-bag ","")
+    freezer=freezer.replace("pulps","pulp")
+    freezer=freezer.replace("roots","root")
+    freezer=freezer.replace(" for back-up"," back-up")
+    freezer=freezer.replace(" for extraction"," extraction")
+    freezer=freezer.replace(" to extract"," extraction")
+    freezer=freezer.replace("freezer","Freezer")
+    freezer=freezer.replace("Thomas","Tom")
+    freezer=freezer.replace("Hannes'","Hannes")
+    freezer=freezer.replace("Hanness","Hannes")
+    freezer=freezer.replace("Miren drawer","Miren Drawer 2")
+    freezer=freezer.replace("blue rack","Blue Rack 1")
+    freezer=freezer.replace(", front extraction clean room 159","")
+    freezer=freezer.replace("Neme San Rafael","neme san rafael")
+    freezer=freezer.replace(", bag mix batch,",", bag Mix batch,")
+    freezer=freezer.replace("bag C group sensitive, blue box (back-up)","bag A1 + A2, C group sensitive, blue box, back-up")
+    if freezer not in storage:
+        print(freezer+" not registered in eLab")
+        break
+    r=requests.get(url+"/samples/get?sampleID="+idEx,headers=headers2)
+    if BadRequest(r,200):
+        r.raise_for_status()
+    storedIn=r.json()[0]["storageLayerID"]
+    needToMove=True
+    if storedIn != 0:
+        if storageRev[storedIn] != freezer:
+            print(name+" already in storage: "+storageRev[storedIn])
+            prompt=defaultPrompt
+            while prompt not in ["y","n"]:
+                prompt=input("Do you want to move it to "+ freezer+"? y/n")
+                print(prompt)
+            if prompt == "n":
+                needToMove=False
+    if needToMove:
+        IDsto=format(storage[freezer])
+        r=requests.post(url+"/samples/moveToLayer/"+IDsto+"?sampleIDs="+idEx,headers=headers1,data={})
+        if BadRequest(r,204):
+            r.raise_for_status()
+
+
+print("Add description from GeneralSampleComment to Skeletal Element")
+alreadyUpdated={}
+for index,rasID in extractTable['RascovanLabID'].items():
+    if format(rasID)=="nan":
+        continue
+    if rasID in alreadyUpdated.keys():
+        continue
+    element=extractTable.loc[index,"GeneralSampleComment"]
+    r=requests.get(url + "samples/"+registered["Skeleton Element"][rasID], headers = headers2)
+    if BadRequest(r,200):
+       r.raise_for_status() 
+    elementLoaded=r.json()["description"]
+    if(format(elementLoaded)!="nan"):
+        element=elementLoaded+"| Comment from Drilling Session: "+element
+    DR=requests.patch(url + "samples/"+registered["Skeleton Element"][rasID], headers = headers2,data = {"description":element})
+    if BadRequest(DR,204):
+        DR.raise_for_status()
+    alreadyUpdated[rasID]=element
+print("finished")
+    
+
 
 
 
