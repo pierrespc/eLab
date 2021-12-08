@@ -55,10 +55,10 @@ def filterName(value,listNAM,ruler):
         raise()
  ###function to replace an empty value read in elab by "nan"
 def putNan(jsonRead,key):
-	if jsonRead.get(key) is not None:
-		return(format(jsonRead.get(key)))
-	else:
-		return("nan")
+    if jsonRead.get(key) is not None:
+        return(format(jsonRead.get(key)).replace("\n","| "))
+    else:
+        return("nan")
 
 ###Prepare all the eLab-API keys necessary to down and upload data. Get list of sample types user is interested in.
 token = format(open(tokenFile,"r").readline().strip())
@@ -146,9 +146,9 @@ for typ in dictType:
 			for feat in data.get("data"):
 				if feat.get("sampleDataType") == "SAMPLELINK":
 					continue
-				elif feat.get("key") == "Pictures" or feat.get("key") == "Scanned":
-					print(feat.get("key")+" will not be outputed")
-					continue
+				#elif feat.get("key") == "Pictures" or feat.get("key") == "Scanned":
+				#	print(feat.get("key")+" will not be outputed")
+				#	continue
 				prompt=defaultPromptFeat
 				while prompt not in ["y","n"]:
 					prompt=input("interested in outputing META feature "+feat.get("key")+"? y/n")
@@ -210,10 +210,15 @@ for level in levelSeq:
                     filteredEntries[level][levelSeq[levelNum]].append(putNan(meta,"value").split("|")[0])
                     #filteredEntries[level]["parent"].append(meta.get("value").split("|")[0])
             if level in types.keys():
+                foundMeta=[]
                 for meta in r.json().get("data"):
                     ##adding the meta field that the user specified
                     if meta.get("key") in types[level]["meta"]:
                         filteredEntries[level][level+"_"+meta.get("key")].append(putNan(meta,"value"))
+                        foundMeta.append(meta.get("key"))
+                for notfound in list(set(types[level]["meta"]) - set(foundMeta)):
+                    filteredEntries[level][level+"_"+notfound].append("nan")
+
                     #if meta.get("key") == "Pictures":
                     #	print("Pictures:"+meta.get("value")+"-->"+putNan(meta,"value")+"??"+format(len(filteredEntries[level][level+"_"+meta.get("key")])))
                 ##adding the data field that the user specified
@@ -265,5 +270,5 @@ out.drop_duplicates()
 out.to_csv(filename, sep='\t', na_rep='NA',mode='w')
         
 
-system("rsync -azvh --progress -e 'ssh' "+filename+" pluisi@sftpcampus.pasteur.fr:/pasteur/entites/metapaleo/Research/ERC-project/Samples/MetaTable_fromELAB/")
+os.system("rsync -azvh --progress -e 'ssh' "+filename+" pluisi@sftpcampus.pasteur.fr:/pasteur/entites/metapaleo/Research/ERC-project/Samples/MetaTable_fromELAB/")
 
