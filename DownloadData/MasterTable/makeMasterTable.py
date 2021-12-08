@@ -34,7 +34,7 @@ else:
 today = date.today().strftime("%Y-%m-%d")
 
 
-filename=outFolder+"/"+today+".Master.eLab.Table.tsv"
+filename=outFolder+"/Outtables/"+today+".Master.eLab.Table.tsv"
 print("will output on "+filename)
 
 f = open(filename, 'w')

@@ -3,4 +3,6 @@ WholeDataSet.tsv
 credentials
 DDBB_extracts.csv
 UploadData/extract/RawTables/
+UploadData/SkeletonElement/RawTables/
 ConfigDiscussion/
+DownloadData/MasterTable/Outtables/
