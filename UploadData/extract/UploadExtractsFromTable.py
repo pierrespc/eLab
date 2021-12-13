@@ -23,16 +23,16 @@ if len(sys.argv) != 5:
 #put anything else if you want a case by case prompt
 
 CSVfilename=str(sys.argv[1])
-delimiterFileWL=str(sys.argv[2])
+delimiterFile=str(sys.argv[2])
 tokenFile=str(sys.argv[3])
 defaultPrompt=str(sys.argv[4])
 
-if delimiterFileWL == "tab":
+if delimiterFile == "tab":
   delimiterFile="\t"
-elif delimiterFileWL == "semicolon":
+elif delimiterFile == "semicolon":
   delimiterFile=";"
 else :
-  exit(delimiterFileML+" not recognized")
+  exit(delimiterFile+" not recognized")
 
 
 if defaultPrompt not in ['y','n','?']:
@@ -97,7 +97,18 @@ for feat in ['Name','Description','Note','Amount','Unit',"parentSampleID"]:
   FeateLabExe[feat] = {"ID": "notMeta"}
 for feat in data.get("data"):
   FeateLabExe[format(feat.get("key"))] = { "ID":format(feat.get("sampleTypeMetaID")),"TYPE":format(feat.get("sampleDataType"))}
-  
+
+
+r = requests.get(url + "sampleTypes/" + types["Skeleton Element"] + "/meta", headers = headers2)
+if BadRequest(r,200):
+  r.raise_for_status()
+data = r.json()
+FeateLabSkel= {}
+for feat in ['Name','Description','Note','Amount','Unit',"parentSampleID"]:
+  FeateLabSkel[feat] = {"ID": "notMeta"}
+for feat in data.get("data"):
+  FeateLabSkel[format(feat.get("key"))] = { "ID":format(feat.get("sampleTypeMetaID")),"TYPE":format(feat.get("sampleDataType"))}
+
 
 #Fill RascovanLabID or extractID columns in the table"
 
@@ -688,22 +699,30 @@ for index,name in extractTable[ExeDict['Name']].items():
 
 print("Add description from GeneralSampleComment to Skeletal Element")
 alreadyUpdated={}
+
 for index,rasID in extractTable['RascovanLabID'].items():
     if format(rasID)=="nan":
         continue
     if rasID in alreadyUpdated.keys():
         continue
     element=extractTable.loc[index,"GeneralSampleComment"]
-    r=requests.get(url + "samples/"+registered["Skeleton Element"][rasID], headers = headers2)
+    r=requests.get(url + "samples/"+registered["Skeleton Element"][rasID]+"/meta", headers = headers2)
     if BadRequest(r,200):
        r.raise_for_status() 
-    elementLoaded=r.json()["description"]
-    if(format(elementLoaded)!="nan"):
-        element=elementLoaded+"| Comment from Drilling Session: "+element
-    DR=requests.patch(url + "samples/"+registered["Skeleton Element"][rasID], headers = headers2,data = {"description":element})
-    if BadRequest(DR,204):
-        DR.raise_for_status()
-    alreadyUpdated[rasID]=element
+    for fea in r.json().get("data"):
+        if fea["key"] == "Observation Drilling":
+            elementLoaded=fea["value"]
+            if format(elementLoaded)!="nan":
+                element=elementLoaded+" "+element
+            MetaData={"key": "Observation Drilling",
+                "sampleTypeMetaID": int(FeateLabSkel["Observation Drilling"]['ID']),
+                "value": element,
+                "sampleDataType": FeateLabSkel["Observation Drilling"]['TYPE']}
+        
+        DR=requests.put(url + "samples/"+registered["Skeleton Element"][rasID]+"/meta", headers = headers2,data = MetaData)
+        if BadRequest(DR,204):
+            DR.raise_for_status()
+        alreadyUpdated[rasID]=element
 print("finished")
     
 
