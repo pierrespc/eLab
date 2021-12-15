@@ -225,7 +225,7 @@ for typ in dictType:
         for meta in data.get("data"):
             typeFilter="?"
             while typeFilter not in ["y","n"]:
-                typeFilter=input("for "+ typName+", is there a filter for "+meta.get("key")+"?")
+                typeFilter=input("\tfor "+ typName+", is there a filter for "+meta.get("key")+"?")
                 if typeFilter == "y":
                     listFilter[typName][meta.get("key")]={}
                     r = requests.get(url + "sampleTypes/" + format(typID) + "/meta/"+format(meta.get("sampleTypeMetaID")), headers = headers2)
@@ -252,7 +252,7 @@ for typ in dictType:
         for feat in ["description","Quantity","note","name"]:
             typeFilter="?"
             while typeFilter not in ["y","n"]:
-                typeFilter=input("for "+ typName+", is there a filter for "+feat+"?")
+                typeFilter=input("\tfor "+ typName+", is there a filter for "+feat+"?")
             if typeFilter == "y":
                 listFilter[typName][feat]={}
                 if feat in ["Observation","Note"]:
