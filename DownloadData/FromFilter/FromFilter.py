@@ -375,7 +375,7 @@ for level in levelSeq:
                     continue
 
 
-                ###filtering for quantity (not meta data)                        
+                ###filtering for quantity (not meta data)
                 if "Quantity" in listFilter[level].keys():
                     r=requests.get(url + "samples/" + idSam + "/quantity", headers = headers2)
                     if BadRequest(r,200):
@@ -434,10 +434,16 @@ for level in levelSeq:
                     filteredEntries[level][levelSeq[levelNum]].append(meta.get("value").split("|")[0])
                     #filteredEntries[level]["parent"].append(meta.get("value").split("|")[0])
             if level in types.keys():
+                found=[]
                 for meta in r.json().get("data"):
                     ##adding the meta field that the user specified
                     if meta.get("key") in types[level]["meta"]:
                         filteredEntries[level][level+"_"+meta.get("key")].append(meta.get("value"))
+                        found.append(meta.get("key"))
+                for meta in types[level]["meta"].keys():
+                    if meta not in found:
+                        print("pb "+sample+" "+meta+" not found")
+                        filteredEntries[level][level+"_"+meta.get("key")].append("NOTineLab")
                 ##adding the data field that the user specified
                 if "description" in types[level]["data"] or "note" in types[level]["data"]:
                     r=requests.get(url+"/samples/"+idSam,headers=headers2)
