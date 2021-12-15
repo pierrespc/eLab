@@ -443,7 +443,7 @@ for level in levelSeq:
                 for meta in types[level]["meta"].keys():
                     if meta not in found:
                         print("pb "+sample+" "+meta+" not found")
-                        filteredEntries[level][level+"_"+meta.get("key")].append("NOTineLab")
+                        filteredEntries[level][level+"_"+meta].append("NOTineLab")
                 ##adding the data field that the user specified
                 if "description" in types[level]["data"] or "note" in types[level]["data"]:
                     r=requests.get(url+"/samples/"+idSam,headers=headers2)
