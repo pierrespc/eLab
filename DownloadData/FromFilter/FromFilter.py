@@ -20,6 +20,9 @@ if len(sys.argv) != 3:
 filename=str(sys.argv[1])
 tokenFile=str(sys.argv[2])
 
+
+f = open(filename, 'w')
+
 token = format(open(tokenFile,"r").readline().strip())
 url = "https://elab-dev.pasteur.fr/api/v1/"
 headers1 = {'Authorization': token, 'Accept': 'application/json','Content-Type':'application/json'}
