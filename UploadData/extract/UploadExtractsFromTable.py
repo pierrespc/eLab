@@ -12,6 +12,9 @@ from httplib2 import Http
 from oauth2client import client, file, tools
 import os.path
 import sys
+
+sys.path.insert(0,'../../FunctionDefinitions/')
+from eLabAPIfunction import *
   
 ########read arguments
 if len(sys.argv) != 5:
@@ -75,8 +78,6 @@ ExeDict={"Name":"ExtractID",
 extractTable=pandas.read_csv(CSVfilename,delimiter=delimiterFile)
 #Prepare all the eLab-API keys necessary to down and upload data
    
-def BadRequest(myReq,code=200):
-  return(myReq.status_code !=code)
     
 r = requests.get(url + "sampleTypes", headers = headers2)
 if BadRequest(r,200):
@@ -628,12 +629,6 @@ stoData=r.json().get("data")
 for sto in stoData:
     
     storageByID[sto["storageLayerID"]]={"name":sto["name"],"parentID":sto["parentStorageLayerID"]}
-
-def getParentSto(ID,stoDict):
-    if stoDict[ID]["parentID"]==0:
-        return(stoDict[ID]["name"])
-    else:
-        return(getParentSto(stoDict[ID]["parentID"],stoDict)+", "+stoDict[ID]["name"])
     
 storage={}
 storageRev={}

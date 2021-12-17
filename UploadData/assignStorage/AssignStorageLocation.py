@@ -12,6 +12,10 @@ from httplib2 import Http
 from oauth2client import client, file, tools
 import os.path
 import sys
+import re
+
+sys.path.insert(0,'../../FunctionDefinitions/')
+from eLabAPIfunction import *
   
 ########read arguments
 if len(sys.argv) != 4:
@@ -38,8 +42,6 @@ headers2 = {'Authorization': token, 'Accept': 'application/json'}
 
 
 
-def BadRequest(myReq,code=200):
-    return(myReq.status_code !=code)
 
 
 
@@ -50,11 +52,6 @@ stoData=r.json().get("data")
 for sto in stoData:
     storageByID[sto["storageLayerID"]]={"name":sto["name"],"parentID":sto["parentStorageLayerID"]}
     #print(sto["name"])
-def getParentSto(ID,stoDict):
-    if stoDict[ID]["parentID"]==0:
-        return(stoDict[ID]["name"])
-    else:
-        return(getParentSto(stoDict[ID]["parentID"],stoDict)+", "+stoDict[ID]["name"])
     
 storage={}
 for stoID in storageByID.keys():
@@ -64,9 +61,6 @@ for stoID in storageByID.keys():
 print(storage)
 
 #Prepare all the eLab-API keys necessary to down and upload data
-def BadRequest(myReq,code=200):
-    return(myReq.status_code !=code)
-
 
 r = requests.get(url + "sampleTypes", headers = headers2)
 if BadRequest(r,200):
@@ -110,7 +104,6 @@ print("finished")
 #Read the file with storage specifications and iterize to move sample
 Table=pandas.read_csv(CSVfilename,delimiter=delimiterFile)
 
-import re
 patternDict={"Skeleton Element":'[A][R][0-9][0-9][0-9][0-9][.][0-9]',
          "Extract":'[A][R][0-9][0-9][0-9][0-9][.][0-9][.][0-9]'}
 

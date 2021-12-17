@@ -12,7 +12,10 @@ from httplib2 import Http
 from oauth2client import client, file, tools
 import os.path
 from datetime import date
+import pandas as pd
 
+sys.path.insert(0,'../../FunctionDefinitions/')
+from eLabAPIfunction import *
 
 ########read arguments
 if len(sys.argv) != 4:
@@ -40,25 +43,8 @@ print("will output on "+filename)
 f = open(filename, 'w')
 f.close()
 ###########functions to check requests
-def BadRequest(myReq,code=200):
-    return(myReq.status_code !=code)
 
 
-
-###########function  to check filter by name
-def filterName(value,listNAM,ruler):
-    if ruler=="in":
-        return(value in listNAM)
-    elif ruler=="notin":
-        return(value not in listNAM)
-    else:
-        raise()
- ###function to replace an empty value read in elab by "nan"
-def putNan(jsonRead,key):
-    if jsonRead.get(key) is not None:
-        return(format(jsonRead.get(key)).replace("\n","| "))
-    else:
-        return("nan")
 
 ###Prepare all the eLab-API keys necessary to down and upload data. Get list of sample types user is interested in.
 token = format(open(tokenFile,"r").readline().strip())
@@ -164,7 +150,6 @@ for typ in dictType:
 
 
 print("now retrieving the samples")
-import pandas as pd
 
 startRecord=False
 filteredEntries={}

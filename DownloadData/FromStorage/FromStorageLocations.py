@@ -12,6 +12,13 @@ from httplib2 import Http
 from oauth2client import client, file, tools
 import os.path
 import sys
+import pandas as pd
+
+sys.path.insert(0,'../../FunctionDefinitions/')
+from eLabAPIfunction import *
+
+
+
 
 ########read arguments
 if len(sys.argv) != 3:
@@ -30,21 +37,17 @@ headers2 = {'Authorization': token, 'Accept': 'application/json'}
 
 
 #Prepare all the eLab-API keys necessary to down and upload data. Get list of sample types user is interested in.
-def BadRequest(myReq,code=200):
-    return(myReq.status_code !=code)
 
 storageByID={}
 r=requests.get(url+"/storageLayers",headers=headers1)
+if BadRequest(r,200):
+    r.raise_for_status()
+print(r)
+
 stoData=r.json().get("data")
 for sto in stoData:
     storageByID[sto["storageLayerID"]]={"name":sto["name"],"parentID":sto["parentStorageLayerID"]}
     #print(sto["name"])
-def getParentSto(ID,stoDict):
-    if stoDict[ID]["parentID"]==0:
-        return(stoDict[ID]["name"])
-    else:
-        return(getParentSto(stoDict[ID]["parentID"],stoDict)+", "+stoDict[ID]["name"])
-    
     
 storage={}
 for stoID in storageByID.keys():
@@ -88,7 +91,6 @@ for i in listChoice:
 print(StorageToReach)
             
         
-import pandas as pd
 out={"Sample":[],"Storage":[],"Type":[]}
 for idSto in StorageToReach:
     r=requests.get(url+"/storageLayers/"+format(StorageToReach[idSto]["id"])+"/samples",headers=headers1)

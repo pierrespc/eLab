@@ -1,6 +1,7 @@
  #!/bin/python
 
 ####Now preparing all required python libs"
+import pandas as pd
 import os
 import json
 import requests
@@ -12,6 +13,11 @@ from httplib2 import Http
 from oauth2client import client, file, tools
 import os.path
 import sys
+from datetime import datetime
+
+sys.path.insert(0,'../../FunctionDefinitions/')
+from eLabAPIfunction import *
+
 
 ########read arguments
 if len(sys.argv) != 3:
@@ -30,13 +36,8 @@ headers2 = {'Authorization': token, 'Accept': 'application/json'}
 
 
 #Prepare all the eLab-API keys necessary to down and upload data. Get list of sample types user is interested in.
-def BadRequest(myReq,code=200):
-    return(myReq.status_code !=code)
-
 
 r = requests.get(url + "sampleTypes", headers = headers2)
-if BadRequest(r,200):
-    r.raise_for_status()
 dictType = r.json().get("data")
 
 ##Now we get all registered ID for all types. (I am lazy now to try to find a clever way to process only the types we need downstream)
@@ -93,119 +94,6 @@ print(types)
 
 
 print("NOW Defining the filters")
-
-
-###Some function defintion 
-from datetime import datetime
-
-def CheckDate(Date):
-    if Date =="?":
-        return(False)
-    else:
-        tmp=Date.split("-")
-        tmp=[int(i) for i in tmp]
-        return(tmp[0] > 2020 and tmp[0] < 2030 and tmp[1] > 0 and tmp[1] < 13 and tmp[2] >0 and tmp[2]<32)
-
-def getDateFilter():
-    wrongEntry=True
-    while wrongEntry:
-        MostRecent="?"
-        while MostRecent != "9999-12-31" and not CheckDate(MostRecent):
-            MostRecent=input("Enter the most recent date, i.e. we will filter IN samples before that date (type Any if no filter )")
-            if MostRecent == "Any":
-                MostRecent="9999-12-31"
-        MostRecent=datetime.strptime(MostRecent,'%Y-%m-%d')
-        Eldest="?"
-        while Eldest != "0001-01-01" and not CheckDate(Eldest):
-            Eldest=input("Enter the eldest date, i.e. i.e. we will filter IN samples after that date (type Any if no filter )")
-            if Eldest == "Any":
-                Eldest="0001-01-01"
-        Eldest=datetime.strptime(Eldest,'%Y-%m-%d')
-        if Eldest<MostRecent:
-            wrongEntry=False
-        else:
-            print("you entered a mostRecent date more ancient and EldestDate")
-            
-    return({"MostRecent":MostRecent,"Eldest":Eldest})
-
-def getOptionFilter(possibleChoices):
-    print(len(possibleChoices))
-    wrongEntry=True
-    while wrongEntry:
-        print("possible choices")
-        index=0
-        for value in possibleChoices:
-            index=index+1
-            print(format(index)+":"+value)
-        listEntered=input("enter your choice(s) (the number(s) separated by space)").split()
-        listEntered=[int(i)-1 for i in listEntered ]
-        if min(listEntered) <0 or max(listEntered)>=len(possibleChoices):
-            print("you entered choices out of range")
-        else:
-            wrongEntry=False
-    return([possibleChoices[i] for i in listEntered])
-
-
-###for now we cover just the case where a given string is in the feature (no filter for NOT, OR, AND, NOT ANY, etc...)
-def getTextFilter():
-    return(input("enter a string to find in the field"))
-
-import re
-
-def getLinkFilter(sampleType,allIDs,link):
-    parentPattern={"Site":{"pattern":"Any","typeParent":"None"},
-                   "Individual":{"pattern":'[A][R][0-9][0-9][0-9][0-9]',"typeParent":"Site"},
-                   "Skeleton Element":{"pattern":'[A][R][0-9][0-9][0-9][0-9][.][0-9]',"typeParent":"Individual"},
-                   "Extract":{"pattern":'[A][R][0-9][0-9][0-9][0-9][.][0-9][.][0-9]',"typeParent":"Skeleton Element"}}
-
-    if sampleType not in parentPattern.keys():
-        raise(sampleType+" not covered to retrieve its parent sample")
-    if link:
-        typeToCheck=parentPattern[sampleType][typeParent]
-    else:
-        typeToCheck=sampleType
-                   
-    listType="?"
-    while not listType in ["prompt","file"]:        
-        listType=input("will you enter IDs one by one or a file (prompt/file)?")
-    wrongEntry=True
-    while wrongEntry:
-        if listType=="file":
-            listIDfile=open(input("file with parent file"),"r").readlines()
-            listID=[]
-            for i in listIDfile:
-                listID.append(i.strip())
-        else:
-            listID=input("enter the parent sample IDs separated by <space>/<space>, must match pattern "+parentPattern[typeToCheck]["pattern"])
-            listID=listID.split(" / ")
-        wrongEntry=False
-        for id in listID:
-            ###check all id match pattern
-            if not (re.match(parentPattern[typeToCheck]["pattern"],id) or parentPattern[typeToCheck]["pattern"] == "Any"):
-                print("wrong pattern for "+id+" expected: "+parentPattern[typeToCheck]["pattern"])
-                wrongEntry=True
-                ###check all id already registered
-            if not id in allIDs.keys():
-                print(id+" not registered in eLab")
-                wrongEntry=True
-        if wrongEntry:
-            print("change those ids either in the file or in the prompted list")
-     
-    bound="?"
-    while bound not in ["notin","in"]:
-        bound=input("keep or remove those IDS (in/notin)?")
-    return({"rule":bound,"list":listID})
-
-def getQuantityFilter():
-    wrongEntry=True
-    while wrongEntry:
-        quanti=float(input("enter a quantity"))
-        bound=input("enter a bound (less, more, exact)")
-        if bound in ["less","more","exact"]:
-            wrongEntry=False
-    return({"rule":bound,"quantity":quanti})
-
-
 print("On which field and Sample type you want to filter?")
 listFilter={}
 levelSeq=['Library pool', 'Indexed Library', 'Non Indexed Library', 'Extract','Skeleton Element', 'Individual', 'Site']
@@ -272,54 +160,6 @@ for typ in dictType:
             del(listFilter[typName])
 
 print("Parsing the database, filter the entry and output ")
-def filterText(value,filter):
-    return(filter in value)
-
-def filterQuantity(value,thres,ruler):
-    if ruler == "exact":
-        return(value==thres)
-    elif ruler == "less":
-        return(value<=thres)
-    elif ruler == "more":
-        return(value>=thres)
-    else:
-        raise(ruler+ " not recognized")
-
-def filterDate(value,filter):
-    value=datetime.strptime(value,'%Y-%m-%d')
-    return(value<=filter["MostRecent"] and value>=filter["Eldest"])
-
-def filterLink(value,listNAM,ruler):
-    value=value.split("|")[0]
-    if ruler=="in":
-        return(value in listNAM)
-    elif ruler=="notin":
-        return(value not in listNAM)
-    else:
-        raise()
-
-        
-def filterName(value,listNAM,ruler):
-    if ruler=="in":
-        return(value in listNAM)
-    elif ruler=="notin":
-        return(value not in listNAM)
-    else:
-        raise()
-    
-
-def filterCombo(value,filter):
-    return(value in filter)
-
-def filterCheckbox(value,filter):
-    AllFound=True
-    for i in value:
-        if i not in filter:
-            AllFound=False
-    return(AllFound)
-
-import pandas as pd
-
 startRecord=False
 filteredEntries={}
 
