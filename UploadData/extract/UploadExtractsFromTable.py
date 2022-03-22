@@ -59,7 +59,7 @@ ExeDict={"Name":"ExtractID",
           "Unit":"fixed_gram",
           "parentSampleID":"RascovanLabID",
           "Date of drilling":"Date",
-          "Pictures":"Pictures",
+          "Pictures Drilling":"Pictures",
           "Person in charge":"PersonInCharge",
           "Laboratory where processed":"Laboratory",
           "Extract Type":"ExtractType",
@@ -364,7 +364,7 @@ for index,name in extractTable[ExeDict['Name']].items():
                     "key": fea,
                     "value": element
                 }
-            elif fea == "Pictures":
+            elif fea == "Pictures Drilling":
                 pictures=extractTable[ExeDict[fea]][index]
                 if pictures == "T":
                     element="/pasteur/entites/metapaleo/Research/ERC-project/Samples/pictures/Drilling/"+extractTable["RascovanLabID"][index]
@@ -692,7 +692,7 @@ for index,name in extractTable[ExeDict['Name']].items():
             r.raise_for_status()
 
 
-print("Add description from GeneralSampleComment to Skeletal Element")
+print("Add description from GeneralSampleComment to Skeletal Element adn Pictures Drilling")
 alreadyUpdated={}
 
 for index,rasID in extractTable['RascovanLabID'].items():
@@ -713,7 +713,16 @@ for index,rasID in extractTable['RascovanLabID'].items():
                 "sampleTypeMetaID": int(FeateLabSkel["Observation Drilling"]['ID']),
                 "value": element,
                 "sampleDataType": FeateLabSkel["Observation Drilling"]['TYPE']}
-        
+        elif fea["key"] == "Pictures Drilling":
+            pictures=extractTable[ExeDict[fea]][index]
+            if pictures == "T":
+                element="/pasteur/entites/metapaleo/Research/ERC-project/Samples/pictures/Drilling/"+extractTable["RascovanLabID"][index]
+            else:
+                element="None"
+                MetaData={"key": fea,
+                          "sampleTypeMetaID": int(FeateLabSkel["Pictures Drilling"]['ID']),
+                          "value": element,
+                          "sampleDataType": FeateLabSkel["Pictures Drilling"]['TYPE']}
         DR=requests.put(url + "samples/"+registered["Skeleton Element"][rasID]+"/meta", headers = headers2,data = MetaData)
         if BadRequest(DR,204):
             DR.raise_for_status()

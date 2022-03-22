@@ -74,19 +74,24 @@ for it in dictType:
     name = it.get("name")
     ID = it.get("sampleTypeID")
     print(name + " --> " + format(ID))
-    r = requests.get(url + "samples" , headers = headers2, params = {'sampleTypeID': ID})
-    if BadRequest:
-        r.raise_for_status()
-    data = r.json()
-    myList = {}
-    for sam in data.get("data"):
-        if format(sam.get("name")) in myList.keys():
-            print(name + ": " + sam.get("name") + " duplicated")
-            break
-        myList[format(sam.get("name"))]=format(sam.get("sampleID"))
-    registered[name] = myList
-
-
+    registered[name]={}
+    pageN=0
+    maxPage=1
+    while pageN < maxPage:
+    	r = requests.get(url + "samples" , headers = headers2, params = {'sampleTypeID': ID,"$records":1000,"$page":pageN})
+    	if BadRequest:
+        	r.raise_for_status()
+    	data = r.json()
+    	for sam in data.get("data"):
+        	if format(sam.get("name")) in registered[name].keys():
+        		print(name + ": " + sam.get("name") + " duplicated")
+        		break
+        	registered[name][format(sam.get("name"))]=format(sam.get("sampleID"))
+    	numTot=data.get("totalRecords")
+    	maxPage=numpy.ceil(numTot/1000)
+    	pageN=pageN+1
+    	print(format(pageN)+"/"+format(maxPage))
+    	
 #####now we get the storage...a bit messy but diofficult to retireve the layers organiztion
 storageByID={}
 r=requests.get(url+"/storageLayers",headers=headers1)
@@ -159,82 +164,91 @@ listNextStepKept="FIRSTlevelParsed"
 ## first we get all entries that match filter for each type
 
 for level in levelSeq:
-    levelNum=levelNum+1
-    ###check if needed to record entries for that level
-    if level not in types.keys() and not startRecord:
-        print(level+" skipped")
-        continue
-    else:
-        startRecord=True
-        filteredEntries[level]={level:[]}
-        if level!=levelSeq[len(levelSeq)-1]:          
-            filteredEntries[level][levelSeq[levelNum]]=[]
+	levelNum=levelNum+1
+	###check if needed to record entries for that level
+	if level not in types.keys() and not startRecord:
+		print(level+" skipped")
+		continue
+	else:
+		startRecord=True
+		filteredEntries[level]={level:[]}
+		if level!=levelSeq[len(levelSeq)-1]:          
+			filteredEntries[level][levelSeq[levelNum]]=[]
+		if level not in ['Site','Individual']:
+			filteredEntries[level][level+"_Storage"]=[]
+			#filteredEntries[level]["parent"]=[]
+		if level in types.keys():
+			for entry in types[level]["meta"]:
+				filteredEntries[level][level+"_"+entry]=[]
+			for entry in types[level]["data"]:
+				filteredEntries[level][level+"_"+entry]=[]
+		print("parsing "+ level)
+		#for sample,idSam in prout.items():
+		searchDuplicate=[]
+		for sample,idSam in registered[level].items():
+			filteredEntries[level][level].append(sample)
+			r=requests.get(url+"/samples/"+idSam+"/meta",headers=headers2)
+			if r.status_code != 200:
+				print(sample+" error metadata")
+				r.raise_for_status()
 
-        if level not in ['Site','Individual']:
-        	filteredEntries[level][level+"_Storage"]=[]
-            #filteredEntries[level]["parent"]=[]
-        
-        if level in types.keys():
-            for entry in types[level]["meta"]:
-                filteredEntries[level][level+"_"+entry]=[]
-            for entry in types[level]["data"]:
-                filteredEntries[level][level+"_"+entry]=[]
-        print("parsing "+ level)
-        #for sample,idSam in prout.items():
-        for sample,idSam in registered[level].items():
-        
-            filteredEntries[level][level].append(sample)
-            r=requests.get(url+"/samples/"+idSam+"/meta",headers=headers2)
-            if r.status_code != 200:
-                r.raise_for_status()
-        
-            ###now adding metadata and data requested by user
-            for meta in r.json().get("data"):
-                ##adding the the parent by default
-                if meta.get("sampleDataType")=="SAMPLELINK":
-                    filteredEntries[level][levelSeq[levelNum]].append(putNan(meta,"value").split("|")[0])
-                    #filteredEntries[level]["parent"].append(meta.get("value").split("|")[0])
-            if level in types.keys():
-                foundMeta=[]
-                for meta in r.json().get("data"):
-                    ##adding the meta field that the user specified
-                    if meta.get("key") in types[level]["meta"]:
-                        filteredEntries[level][level+"_"+meta.get("key")].append(putNan(meta,"value"))
-                        foundMeta.append(meta.get("key"))
-                for notfound in list(set(types[level]["meta"]) - set(foundMeta)):
-                    filteredEntries[level][level+"_"+notfound].append("nan")
+			###now adding metadata and data requested by user
+			for meta in r.json().get("data"):
+				##adding the the parent by default
+				if meta.get("sampleDataType")=="SAMPLELINK":
+					filteredEntries[level][levelSeq[levelNum]].append(putNan(meta,"value").split("|")[0])
+					if idSam in searchDuplicate:
+						print(sample+" ("+idSam+"): "+putNan(meta,"value"))
+					searchDuplicate.append(idSam)
+					#filteredEntries[level]["parent"].append(meta.get("value").split("|")[0])
+			if level in types.keys():
+				foundMeta=[]
+				for meta in r.json().get("data"):
+					##adding the meta field that the user specified
+					if meta.get("key") in types[level]["meta"]:
+						#if meta.get("key") == "Pictures Drilling" and level == "Extract" :
+						#	print(sample+" ("+idSam+"): "+putNan(meta,"value"))
+
+						filteredEntries[level][level+"_"+meta.get("key")].append(putNan(meta,"value"))
+						foundMeta.append(meta.get("key"))
+				for notfound in list(set(types[level]["meta"]) - set(foundMeta)):
+					filteredEntries[level][level+"_"+notfound].append("nan")
 
                     #if meta.get("key") == "Pictures":
                     #	print("Pictures:"+meta.get("value")+"-->"+putNan(meta,"value")+"??"+format(len(filteredEntries[level][level+"_"+meta.get("key")])))
                 ##adding the data field that the user specified
 
-                r=requests.get(url+"/samples/"+idSam,headers=headers2)
-                if r.status_code != 200:
-                	r.raise_for_status()
-                if level not in ['Site','Individual']:
-                	idSto=format(r.json().get("storageLayerID"))
-                	if idSto == "0":
-                		filteredEntries[level][level+"_Storage"].append("nan")
-                	else:
-                		filteredEntries[level][level+"_Storage"].append(storageByID[r.json().get("storageLayerID")])
-                for dataTy in ["description","note"]:
-                	if dataTy in types[level]["data"]:
-                		filteredEntries[level][level+"_"+dataTy].append(putNan(r.json(),dataTy))
-                if "Quantity" in types[level]["data"]:
-                	r=requests.get(url+"/samples/"+idSam+"/quantity",headers=headers2)
-                	if r.status_code != 200:
-                		r.raise_for_status()
-                	filteredEntries[level][level+"_Quantity"].append(putNan(r.json(),"amount")+putNan(r.json(),"unit"))
-        print("we have "+format(len(filteredEntries[level][level]))+" remaining")
+				r=requests.get(url+"/samples/"+idSam,headers=headers2)
+				if r.status_code != 200:
+					print(sample+" error data")
+					r.raise_for_status()
+				if level not in ['Site','Individual']:
+					idSto=format(r.json().get("storageLayerID"))
+					if idSto == "0":
+						filteredEntries[level][level+"_Storage"].append("nan")
+					else:
+						filteredEntries[level][level+"_Storage"].append(storageByID[r.json().get("storageLayerID")])
+				for dataTy in ["description","note"]:
+					if dataTy in types[level]["data"]:
+						filteredEntries[level][level+"_"+dataTy].append(putNan(r.json(),dataTy))
+				if "Quantity" in types[level]["data"]:
+					r=requests.get(url+"/samples/"+idSam+"/quantity",headers=headers2)
+					if r.status_code != 200:
+						print(sample+" error quantity")		
+						r.raise_for_status()
+					filteredEntries[level][level+"_Quantity"].append(putNan(r.json(),"amount")+putNan(r.json(),"unit"))
+			print("parsing "+ level+": "+format(len(filteredEntries[level][level]))+"/"+format(len(registered[level])))
+
+		print("we have "+format(len(filteredEntries[level][level]))+" remaining")
 
 
-        # we register the parent samples from that list
-        if level != "Site":
-            listNextStepKept=filteredEntries[level][levelSeq[levelNum]]
+		# we register the parent samples from that list
+		if level != "Site":
+			listNextStepKept=filteredEntries[level][levelSeq[levelNum]]
 
-        #for colName in filteredEntries[level].keys():
-        #	print(colName+" "+format(len(filteredEntries[level][colName])))	
-        filteredEntries[level]["df"]=pd.DataFrame(filteredEntries[level])
+		for colName in filteredEntries[level].keys():
+			print(colName+" "+format(len(filteredEntries[level][colName])))	
+		filteredEntries[level]["df"]=pd.DataFrame(filteredEntries[level])
 
 
 
@@ -242,14 +256,14 @@ for level in levelSeq:
 print("Now we merge the different data frames obtained for each level into an unique table!")
 Starting=True
 for level in levelSeq:
-    if level not in types.keys() and Starting:
-        print(level+" skipped")
-        continue
-    if Starting:
-        out=filteredEntries[level]["df"]
-        Starting=False
-    else:
-        out=filteredEntries[level]["df"].merge(out,how='outer',on=level)
+	if level not in types.keys() and Starting:
+		print(level+" skipped")
+		continue
+	if Starting:
+		out=filteredEntries[level]["df"]
+		Starting=False
+	else:
+		out=filteredEntries[level]["df"].merge(out,how='outer',on=level)
         
 out.drop_duplicates()        
 out.to_csv(filename, sep='\t', na_rep='NA',mode='w')
