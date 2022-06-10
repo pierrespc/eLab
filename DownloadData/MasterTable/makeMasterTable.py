@@ -37,6 +37,7 @@ else:
 today = date.today().strftime("%Y-%m-%d")
 
 
+
 filename=outFolder+"/Outtables/"+today+".Master.eLab.Table.tsv"
 print("will output on "+filename)
 
@@ -85,7 +86,7 @@ for it in dictType:
     	for sam in data.get("data"):
         	if format(sam.get("name")) in registered[name].keys():
         		print(name + ": " + sam.get("name") + " duplicated")
-        		break
+        		exit
         	registered[name][format(sam.get("name"))]=format(sam.get("sampleID"))
     	numTot=data.get("totalRecords")
     	maxPage=numpy.ceil(numTot/1000)
@@ -203,14 +204,21 @@ for level in levelSeq:
 					#filteredEntries[level]["parent"].append(meta.get("value").split("|")[0])
 			if level in types.keys():
 				foundMeta=[]
+				subRec=0
 				for meta in r.json().get("data"):
 					##adding the meta field that the user specified
+
+					if meta.get("key") == "Subsistence Strategy":
+						subRec=subRec+1
 					if meta.get("key") in types[level]["meta"]:
 						#if meta.get("key") == "Pictures Drilling" and level == "Extract" :
 						#	print(sample+" ("+idSam+"): "+putNan(meta,"value"))
 
 						filteredEntries[level][level+"_"+meta.get("key")].append(putNan(meta,"value"))
 						foundMeta.append(meta.get("key"))
+				if subRec > 1:
+					print(sample+" duplicated subsistence")
+					print(meta)
 				for notfound in list(set(types[level]["meta"]) - set(foundMeta)):
 					filteredEntries[level][level+"_"+notfound].append("nan")
 
@@ -237,8 +245,8 @@ for level in levelSeq:
 						print(sample+" error quantity")		
 						r.raise_for_status()
 					filteredEntries[level][level+"_Quantity"].append(putNan(r.json(),"amount")+putNan(r.json(),"unit"))
-			print("parsing "+ level+": "+format(len(filteredEntries[level][level]))+"/"+format(len(registered[level])))
-
+			#print("parsing "+ level+": "+format(len(filteredEntries[level][level]))+"/"+format(len(registered[level])))
+				
 		print("we have "+format(len(filteredEntries[level][level]))+" remaining")
 
 
